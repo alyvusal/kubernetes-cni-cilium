@@ -1,0 +1,293 @@
+# Install; cilium with:
+# policyEnforcementMode: always    # enforce network policies
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: default-deny-db
+  namespace: default
+spec:
+  endpointSelector:
+    matchLabels:
+      tier: database
+  ingress:
+    - {}
+  egress:
+    - {}
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: database-policy
+  namespace: default
+spec:
+  endpointSelector:
+    matchLabels:
+      tier: database
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            tier: backend
+      toPorts:
+        - ports:
+            - port: "7379"
+    - fromCIDRSet:
+        - cidr: 102.213.50.174/32
+      toPorts:
+        - ports:
+            - port: "443"
+  egress:
+    - {}
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: backend-policy
+spec:
+  endpointSelector:
+    matchLabels:
+       tier: backend
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            tier: frontend
+      toPorts:
+        - ports:
+            - port: "80"
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            tier: database
+      toPorts:
+        - ports:
+            - port: "7379"
+    - toFQDNs:
+        - matchPattern: "*.cloud.google.com"
+      toPorts:
+        - ports:
+            - port: "443"
+        - ports:
+            - port: "80"
+    - toEndpoints:
+      - matchLabels:
+          io.kubernetes.pod.namespace: kube-system
+          k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+          rules:
+            dns:
+              - matchPattern: "*"
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: frontend-policy
+  namespace: default
+spec:
+  endpointSelector:
+    matchLabels:
+      tier: frontend
+  ingress:
+    - fromEntities:
+        - world
+      toPorts:
+        - ports:
+            - port: "443"
+        - ports:
+            - port: "80"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            tier: backend
+      toPorts:
+        - ports:
+            - port: "80"
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+          rules:
+            dns:
+              - matchPattern: "*"
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: core-dns
+  namespace: kube-system
+spec:
+  endpointSelector:
+    matchLabels:
+      io.cilium.k8s.policy.serviceaccount: coredns
+  # ingress:
+  # - fromEndpoints:
+  #   - matchLabels:
+  #       io.cilium.k8s.policy.serviceaccount: hubble-ui
+  # egress:
+  # - toEntities:
+  #   - kube-apiserver
+  #   - world
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: local-path-provisioner
+  namespace: local-path-storage
+spec:
+  endpointSelector:
+    matchLabels:
+      io.cilium.k8s.policy.serviceaccount: local-path-provisioner-service-account
+  egress:
+  - toEntities:
+    - kube-apiserver
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: hubble-relay
+  namespace: kube-system
+spec:
+  endpointSelector:
+    matchLabels:
+      io.cilium.k8s.policy.serviceaccount: hubble-relay
+  ingress:
+  - fromEndpoints:
+    - matchLabels:
+        io.cilium.k8s.policy.serviceaccount: hubble-ui
+  egress:
+  - toEntities:
+    - host
+    - remote-node
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: hubble-ui
+  namespace: kube-system
+spec:
+  endpointSelector:
+    matchLabels:
+      io.cilium.k8s.policy.serviceaccount: hubble-ui
+  egress:
+  - toEntities:
+    - kube-apiserver
+  - toEndpoints:
+    - matchLabels:
+        io.cilium.k8s.policy.serviceaccount: hubble-relay
+    # - matchLabels:
+    #     io.cilium.k8s.policy.serviceaccount: coredns
+---
+# Use of Cilium clusterwide network policy
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: core-dns-ingress
+spec:
+  endpointSelector:
+    matchLabels:
+      io.cilium.k8s.policy.serviceaccount: coredns
+      k8s:io.kubernetes.pod.namespace: kube-system
+  ingress:
+  - fromEndpoints:
+    - {}
+    toPorts:
+    - ports:
+      - port: "53"
+        protocol: UDP
+---
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: core-dns-egress
+spec:
+  endpointSelector: {}
+  egress:
+  - toEndpoints:
+    - matchLabels:
+        io.cilium.k8s.policy.serviceaccount: coredns
+        k8s:io.kubernetes.pod.namespace: kube-system
+    toPorts:
+    - ports:
+      - port: "53"
+        protocol: UDP
+---
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: intercept-all-dns
+spec:
+  endpointSelector:
+    matchExpressions:
+      - key: "io.kubernetes.pod.namespace"
+        operator: "NotIn"
+        values:
+        - "kube-system"
+      - key: "k8s-app"
+        operator: "NotIn"
+        values:
+        - kube-dns
+  enableDefaultDeny:
+    egress: false
+    ingress: false
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+          - port: "53"
+            protocol: TCP
+          - port: "53"
+            protocol: UDP
+          rules:
+            dns:
+              - matchPattern: "*"
+---
+apiVersion: "cilium.io/v2"
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: "external-lockdown"
+spec:
+  endpointSelector: {}
+  ingressDeny:
+  - fromEntities:
+    - "world"
+  ingress:
+  - fromEntities:
+    - "all"
+---
+# Below will deny all other traffic for all pods, you need to creare more policies to allow other traffic
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: allow-dns
+spec:
+  description: "Allow DNS traffic cluster-wide"
+  endpointSelector: {} # Matches all endpoints in the cluster
+  egress:
+    - toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+  ingress:
+    - fromEndpoints:
+        - {}
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+          rules:
+            dns:
+              - matchPattern: "*"

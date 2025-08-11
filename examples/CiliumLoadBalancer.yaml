@@ -1,0 +1,31 @@
+apiVersion: "cilium.io/v2alpha1"
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: "default"
+  namespace: kube-system
+spec:
+  blocks:
+  # - cidr: "172.18.255.192/26"
+  # - cidr: "192.168.0.100/32"
+  - start: "172.18.255.230"
+    stop: "172.18.255.250"
+  # serviceSelector:
+  #   matchExpressions:
+  #     - {key: color, operator: In, values: [yellow, red, blue]}
+---
+apiVersion: "cilium.io/v2alpha1"
+kind: CiliumL2AnnouncementPolicy
+metadata:
+  name: l2announcement-policy
+  namespace: kube-system
+spec:
+  loadBalancerIPs: true
+  externalIPs: true
+  serviceSelector:
+    matchLabels: {}  # k8s-app: myapp
+  nodeSelector:
+    matchExpressions:
+      - key: node-role.kubernetes.io/control-plane
+        operator: DoesNotExist
+  interfaces:
+  - ^eth[0-9]+
