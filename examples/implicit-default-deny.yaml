@@ -1,0 +1,12 @@
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: default-deny
+  namespace: default
+spec:
+  endpointSelector: {}  # no rule, select all pods in the same namespace
+  ingress:
+    - {}  # match nothing, causes to enable default implicit deny for ingress
+  egress:
+    - {}  # match nothing, causes to enable default implicit deny for egress

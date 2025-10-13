@@ -1,0 +1,76 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    run: nginx
+  name: nginx
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    run: nginx
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: nginx
+  name: nginx
+spec:
+  containers:
+  - image: nginx
+    name: nginx
+    resources: {}
+  dnsPolicy: ClusterFirst
+  restartPolicy: Always
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: curl
+  name: curl
+spec:
+  containers:
+  - args:
+    - sleep
+    - "36000"
+    image: alpine/curl
+    name: curl
+    resources: {}
+  dnsPolicy: ClusterFirst
+  restartPolicy: Always
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: "tofqdn-dns-visibility"
+spec:
+  endpointSelector:
+    matchLabels:
+      run: curl
+  egress:
+  # - toEntities:
+  #   - world
+  # or
+  - toPorts:
+      - ports:
+        - port: "53"
+          protocol: ANY
+        rules:
+          dns:
+            - matchPattern: "*"
+  # Allow by DNS
+  - toFQDNs:
+      - matchName: "nginx.default.svc.cluster.local"
+      # - matchPattern: "*.default.svc.cluster.local"
+  # Allow by IP
+  - toEndpoints:
+    - matchLabels:
+        run: nginx
+    toPorts:
+      - ports:
+        - port: "80"
+          protocol: TCP

@@ -1,9 +1,7 @@
-# Cilium
-
-**While Hubble** provides excellent network-level observability, **Tetragon** takes security observability to the next level by providing kernel and process-level insights. Tetragon, another eBPF-powered tool under Cilium, can: Monitor process executions and file access. Detect and prevent unauthorized binaries from running.
+# Cilium (eBPF based networking, Observability, Security)
 
 **Note on eBPF**:
-Check if the necessary eBPF features are enabled:
+Check if the necessary eBPF features are enabled and see also troubleshooting [guide](https://docs.cilium.io/en/latest/reference-guides/bpf/debug_and_test/):
 
 ```bash
 sudo bpftool feature
@@ -24,6 +22,8 @@ sudo bpftool feature
   - To interact with eBPF, you typically need user-space tools like `bpftool` or `bcc`.
   - These tools are not always installed by default but can be installed via package managers (e.g., `apt`, `yum`, etc.).
 
+**While Hubble** provides excellent network-level observability, **Tetragon** takes security observability to the next level by providing kernel and process-level insights. Tetragon, another eBPF-powered tool under Cilium, can: Monitor process executions and file access. Detect and prevent unauthorized binaries from running.
+
 ## Install
 
 ### [Install with CLI](https://docs.cilium.io/en/stable/gettingstarted/k8s-install-default/)
@@ -39,11 +39,11 @@ cilium status
 ```bash
 helm repo add cilium https://helm.cilium.io/
 
-helm install cilium cilium/cilium \
-  --version 1.16.5 \
+helm upgrade -i cilium cilium/cilium \
+  --version 1.18.2 \
   -n kube-system
 
-# afrter any change in helm
+# after any change in helm
 kubectl -n kube-system rollout restart deployment cilium-operator
 kubectl -n kube-system rollout restart ds cilium
 ```
@@ -113,6 +113,7 @@ cilium connectivity test
 
 cilium hubble port-forward&
 hubble status
+hubble observe --pod testpod -f
 ```
 
 Troubleshoot
@@ -136,7 +137,13 @@ kubectl create -f https://raw.githubusercontent.com/cilium/cilium/v1.15.3/exampl
 
 ## Policy
 
-### [Network Policy Editor](https://networkpolicy.io/)
+Sample app
+
+```bash
+kubectl apply -f examples/apps.yaml
+```
+
+### [Network Policy Editor](https://editor.networkpolicy.io/)
 
 [Editor](https://editor.networkpolicy.io/)
 
@@ -168,9 +175,49 @@ spec:
 
 Note that if the endpoint selector field is empty, the policy will be applied to all pods in the namespace.
 
+**Default deny vs explicit deny (very important):**
+
+- Default deny is the implicit effect of providing no allow rules for a given direction (e.g., `ingress: []` or omitting `ingress` entirely) — traffic not explicitly allowed is denied.
+- Explicit deny uses `ingressDeny`/`egressDeny` sections to actively block traffic that would otherwise be allowed. In Cilium, explicit denies take precedence over allows (Deny > Allow).
+- Allow-all in Cilium uses an empty rule object (e.g., `- {}`) which is a wildcard rule matching everything for that direction. This is different from an empty list `[]` which means deny-all by default.
+
+**Empty {}:**
+
+1. Empty endpointSelector: {}
+An empty endpointSelector with {} means the policy applies to all endpoints within the namespace where the CiliumNetworkPolicy is defined. This acts as a wildcard selector for endpoints.
+2. Empty ingress: - {} or egress: - {}
+When an ingress or egress section contains an empty rule {} (represented as a list item - {}), it signifies a default deny for that direction of traffic for the endpoints selected by the policy.
+Specifically, if ingress: - {} is present, all incoming traffic to the selected endpoints will be denied by default, unless explicitly allowed by other rules within the ingress section.
+Similarly, if egress: - {} is present, all outgoing traffic from the selected endpoints will be denied by default, unless explicitly allowed by other rules within the egress section.
+
 ```bash
 kubectl get cnp  # cnp is short for the CiliumNetworkPolicy
 ```
+
+## Compare NetworkPolicy & CiliumNetworkPolicy
+
+| Feature / Behavior | **Kubernetes NetworkPolicy** | **CiliumNetworkPolicy** |
+|---------------------|-----------------------------|--------------------------|
+| API Group | `networking.k8s.io/v1` | `cilium.io/v2` |
+| CRD Type | `NetworkPolicy` | `CiliumNetworkPolicy` / `CiliumClusterwideNetworkPolicy` |
+| Default behavior (no policy) | All traffic allowed | All traffic allowed |
+| Policy type | Allow-only (implicit deny) | Allow + Explicit deny supported |
+| Deny rules supported | ❌ No | ✅ Yes (`ingressDeny`, `egressDeny`) |
+| Rule precedence | N/A (union of allows) | **Deny > Allow** |
+| `ingress: []` meaning | Deny all ingress | Deny all ingress |
+| `ingress: - {}` meaning | ❌ Invalid YAML or no effect | Allow all ingress (wildcard) |
+| `ingress:` omitted | Deny all ingress | Deny all ingress |
+| Egress control | Supported (since v1.8) | Fully supported + deny semantics |
+| CIDR filtering | ✅ Basic (`ipBlock`) | ✅ Advanced (`fromCIDRSet`, `toCIDRSet`) |
+| L4 (port) filtering | ✅ Yes | ✅ Yes |
+| L7 (HTTP, DNS, Kafka, etc.) | ❌ No | ✅ Yes (via Envoy integration) |
+| Namespace scope | Namespaced | Namespaced or Clusterwide (`CCNP`) |
+| Policy merging behavior | Additive (union of allows) | Additive (union of allows + denies) |
+| Order of evaluation | Irrelevant (all allows combined) | Deny → Allow (deny evaluated first) |
+| Visibility / Metrics | Basic (via CNI logs) | Rich observability (Hubble, metrics, flow visibility) |
+| Example default deny | `ingress: []`, `egress: []` | `ingress: []`, `egress: []` |
+| Example allow all | ❌ Not possible via policy | `ingress: - {}`, `egress: - {}` |
+| Advanced match (labels, CIDR, FQDN, etc.) | Limited | Extensive (label, CIDR, FQDN, service, identity, etc.) |
 
 ## REFERENCE
 

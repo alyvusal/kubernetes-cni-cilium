@@ -1,0 +1,11 @@
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: no-rule-applied
+  namespace: default
+spec:
+  # This simply means, select all resources and apply no rule to them.
+  endpointSelector: {}  # Selects all pods in the default namespace
+  ingress: []  # Allows all ingress traffic (no rules = no enforcement)
+  egress: []   # Allows all egress traffic (no rules = no enforcement)
