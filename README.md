@@ -24,6 +24,67 @@ sudo bpftool feature
 
 **While Hubble** provides excellent network-level observability, **Tetragon** takes security observability to the next level by providing kernel and process-level insights. Tetragon, another eBPF-powered tool under Cilium, can: Monitor process executions and file access. Detect and prevent unauthorized binaries from running.
 
+---
+
+## 🧠 CiliumNetworkPolicy (CNP / CCNP)
+
+Cilium extends the basic Kubernetes NetworkPolicy model by operating at **Layer 3–7**, providing **more granular control**, **observability**, and **explicit deny** capabilities.
+CiliumNetworkPolicies (CNPs) leverage **eBPF** for efficient enforcement directly in the Linux kernel.
+
+### 🔹 Key Concepts and Enhancements
+
+- **Policy Types**
+  - `CiliumNetworkPolicy` → Namespace-scoped
+  - `CiliumClusterwideNetworkPolicy` → Cluster-wide (applies across namespaces)
+
+- **L3–L7 Aware**
+  Cilium adds **application-layer (L7)** awareness, supporting filtering based on:
+  - HTTP methods, paths, headers
+  - DNS names (`toFQDNs`)
+  - Kafka topics, gRPC services, etc.
+
+- **Explicit Deny Rules**
+  Supports both **allow** and **deny** rules (`ingressDeny`, `egressDeny`).
+  Deny rules have **higher precedence** than allow rules.
+
+- **Advanced Match Options**
+  Match traffic by:
+  - Pod, namespace, or service labels
+  - CIDRs, IP sets
+  - FQDNs, ports, protocols
+  - Identities (Cilium internal label system)
+
+- **Layer 7 Proxying**
+  Uses **Envoy** as an embedded L7 proxy to enforce HTTP/DNS/Kafka policies.
+
+- **Visibility and Observability**
+  Integrated with **Hubble** — offering flow visibility, metrics, and tracing of policy decisions.
+
+- **Policy Additivity with Deny Semantics**
+  Policies are additive, but **deny rules override allows**.
+  Order matters only in that deny is always evaluated first.
+
+- **Clusterwide Scoping**
+  Cilium can define cluster-wide network security with **CCNP**, something not possible with standard NetworkPolicy.
+
+- **CIDR Sets and Identity Awareness**
+  Supports rich CIDR filtering via `fromCIDRSet` / `toCIDRSet` and **identity-based** rules for workload-aware networking.
+
+### 📘 Summary
+
+> **CiliumNetworkPolicy = L3–L7 aware, supports allow + explicit deny, clusterwide scope, and deep observability via eBPF and Hubble.**
+
+---
+
+## 🔐 [**Kubernetes NetworkPolicy**](https://github.com/alyvusal/kubernetes/blob/main/network-policy/README.md) vs Cilium Network Policies
+
+Kubernetes **NetworkPolicies** and **CiliumNetworkPolicies** define how Pods can communicate with each other and with external endpoints.
+While Kubernetes provides **L3/L4 isolation**, **Cilium** extends this to **L7**, enabling deep visibility, explicit deny rules, and advanced identity-based filtering.
+
+⚖️ See in detail [Comparison of NetworkPolicy & CiliumNetworkPolicy](https://github.com/alyvusal/kubernetes/blob/main/network-policy/README.md#-kubernetes-network-policies-vs-cilium-network-policies)
+
+---
+
 ## Install
 
 ### [Install with CLI](https://docs.cilium.io/en/stable/gettingstarted/k8s-install-default/)
@@ -145,8 +206,6 @@ kubectl apply -f examples/apps.yaml
 
 ### [Network Policy Editor](https://editor.networkpolicy.io/)
 
-[Editor](https://editor.networkpolicy.io/)
-
 ### Structure
 
 - [Endpoint-based](https://docs.cilium.io/en/stable/security/policy/language/#endpoints-based): can define connectivity rules based on pod labels.
@@ -194,31 +253,6 @@ Similarly, if egress: - {} is present, all outgoing traffic from the selected en
 kubectl get cnp  # cnp is short for the CiliumNetworkPolicy
 ```
 
-## Compare NetworkPolicy & CiliumNetworkPolicy
-
-| Feature / Behavior | **Kubernetes NetworkPolicy** | **CiliumNetworkPolicy** |
-|---------------------|-----------------------------|--------------------------|
-| API Group | `networking.k8s.io/v1` | `cilium.io/v2` |
-| CRD Type | `NetworkPolicy` | `CiliumNetworkPolicy` / `CiliumClusterwideNetworkPolicy` |
-| Default behavior (no policy) | All traffic allowed | All traffic allowed |
-| Policy type | Allow-only (implicit deny) | Allow + Explicit deny supported |
-| Deny rules supported | ❌ No | ✅ Yes (`ingressDeny`, `egressDeny`) |
-| Rule precedence | N/A (union of allows) | **Deny > Allow** |
-| `ingress: []` meaning | Deny all ingress | Deny all ingress |
-| `ingress: - {}` meaning | ❌ Invalid YAML or no effect | Allow all ingress (wildcard) |
-| `ingress:` omitted | Deny all ingress | Deny all ingress |
-| Egress control | Supported (since v1.8) | Fully supported + deny semantics |
-| CIDR filtering | ✅ Basic (`ipBlock`) | ✅ Advanced (`fromCIDRSet`, `toCIDRSet`) |
-| L4 (port) filtering | ✅ Yes | ✅ Yes |
-| L7 (HTTP, DNS, Kafka, etc.) | ❌ No | ✅ Yes (via Envoy integration) |
-| Namespace scope | Namespaced | Namespaced or Clusterwide (`CCNP`) |
-| Policy merging behavior | Additive (union of allows) | Additive (union of allows + denies) |
-| Order of evaluation | Irrelevant (all allows combined) | Deny → Allow (deny evaluated first) |
-| Visibility / Metrics | Basic (via CNI logs) | Rich observability (Hubble, metrics, flow visibility) |
-| Example default deny | `ingress: []`, `egress: []` | `ingress: []`, `egress: []` |
-| Example allow all | ❌ Not possible via policy | `ingress: - {}`, `egress: - {}` |
-| Advanced match (labels, CIDR, FQDN, etc.) | Limited | Extensive (label, CIDR, FQDN, service, identity, etc.) |
-
 ## REFERENCE
 
 - [Requirements](https://docs.cilium.io/en/stable/network/kubernetes/requirements/)
@@ -255,3 +289,5 @@ kubectl get cnp  # cnp is short for the CiliumNetworkPolicy
 - [Tuning](https://docs.cilium.io/en/stable/operations/performance/tuning/)
 - [Command Reference](https://docs.cilium.io/en/stable/cmdref/)
 - [Helm Reference](https://docs.cilium.io/en/stable/helm-reference/)
+- [Cilium Network Policy Reference](https://docs.cilium.io/en/stable/security/policy/)
+- [Hubble Observability](https://docs.cilium.io/en/stable/observability/hubble/)
