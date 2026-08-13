@@ -1,5 +1,0 @@
-resources:
-  - https://raw.githubusercontent.com/projectcalico/calico/v3.27.0/manifests/custom-resources.yaml
-
-patches:
-  - path: custom/ipPools.yaml

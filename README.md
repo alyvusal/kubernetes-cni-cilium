@@ -101,7 +101,7 @@ cilium status
 helm repo add cilium https://helm.cilium.io/
 
 helm upgrade -i cilium cilium/cilium \
-  --version 1.18.2 \
+  --version 1.20.0 \
   -n kube-system
 
 # after any change in helm
@@ -117,7 +117,7 @@ cilium connectivity test
 
 # Validate connectivity in cluster with deployment
 kubectl create ns cilium-test
-kubectl apply -n cilium-test -f https://raw.githubusercontent.com/cilium/cilium/1.16.3/examples/kubernetes/connectivity-check/connectivity-check.yaml
+kubectl apply -n cilium-test -f https://raw.githubusercontent.com/cilium/cilium/1.20.0/examples/kubernetes/connectivity-check/connectivity-check.yaml
 # The pod name indicates the connectivity variant and the readiness and liveness gate indicates success or failure of the test
 kubectl get pods -n cilium-test
 
