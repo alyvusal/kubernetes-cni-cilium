@@ -1,0 +1,174 @@
+# make this IP address accessible locally by using CiliumL2AnnouncementPolicy
+# Layer 2 announcement lets nodes advertise service IPs on the local network using the
+# Address Resolution Protocol (ARP) for IPv4 or Neighbor Discovery (ND) for IPv6,
+# so external hosts can reach those IPs without a separate load balancer if they share
+# a layer 2 domain
+apiVersion: "cilium.io/v2alpha1"
+kind: CiliumL2AnnouncementPolicy
+metadata:
+  name: announce-lb-ips
+spec:
+  loadBalancerIPs: true
+  interfaces:
+  - eth0
+  # serviceSelector:
+  #   matchLabels:
+  #     environment: prod
+  nodeSelector:
+    matchExpressions:
+      - key: node-role.kubernetes.io/control-plane
+        operator: DoesNotExist
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: httpd-dev
+  labels:
+    environment: dev
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: httpd-dev
+  ports:
+  - port: 80
+---
+apiVersion: "cilium.io/v2"
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: "lb-pool-dev"
+spec:
+  allowFirstLastIPs: "No"
+  blocks:
+  - start: 172.18.10.100
+    stop: 172.18.10.120
+  serviceSelector:  # apply to services with the label environment=dev (uses docker0 172.18.0.0/16)
+    matchLabels:
+      environment: dev
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: httpd-prod
+  labels:
+    environment: prod
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: httpd-prod
+  ports:
+  - port: 80
+---
+# Note that CiliumLoadBalancerIPPool is a cluster-wide resource, so any service in any
+# namespace with the matching label can receive an IP from this pool.
+# If you want to further restrict the pool to a specific namespace, you can use the
+# special selector io.kubernetes.service.namespace:
+apiVersion: "cilium.io/v2"
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: "lb-pool-prod"
+spec:
+  allowFirstLastIPs: "No"
+  blocks:
+  - start: 172.18.20.100
+    stop: 172.18.20.120
+  serviceSelector:  # apply to services with the label environment=prod (uses br-d0b7e2872038 172.18.0.0/16)
+    matchLabels:
+      environment: prod
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: payments
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payments
+  namespace: payments
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: payments
+  ports:
+  - port: 80
+---
+apiVersion: "cilium.io/v2"
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: "lb-pool-payments"
+spec:
+  allowFirstLastIPs: "No"
+  blocks:
+  - start: "172.18.30.100"
+    stop: "172.18.30.120"
+  serviceSelector:
+    matchLabels:
+      io.kubernetes.service.namespace: payments  # namespace selector
+---
+# Sample Deployments for Services
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: httpd-dev
+  labels:
+    app.kubernetes.io/name: httpd-dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: httpd-dev
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: httpd-dev
+    spec:
+      containers:
+      - name: httpd
+        image: httpd:2.4
+        ports:
+        - containerPort: 80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: httpd-prod
+  labels:
+    app.kubernetes.io/name: httpd-prod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: httpd-prod
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: httpd-prod
+    spec:
+      containers:
+      - name: httpd
+        image: httpd:2.4
+        ports:
+        - containerPort: 80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payments
+  namespace: payments
+  labels:
+    app.kubernetes.io/name: payments
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: payments
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: payments
+    spec:
+      containers:
+      - name: httpd
+        image: httpd:2.4
+        ports:
+        - containerPort: 80

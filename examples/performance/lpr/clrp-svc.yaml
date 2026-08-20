@@ -1,0 +1,22 @@
+apiVersion: "cilium.io/v2"
+kind: CiliumLocalRedirectPolicy
+metadata:
+  name: "echo-server-lrp"
+spec:
+  # Identifies the Kubernetes service for which traffic should be intercepted. Cilium
+  # matches this service by name and namespace to determine which frontend
+  # requests are eligible for local redirection.
+  redirectFrontend:
+    serviceMatcher:
+      serviceName: echo-server
+      namespace: default
+  # Specifies the set of local pods (based on labels) and destination port to which
+  # frontend traffic should be redirected, if a matching pod exists on the same node
+  redirectBackend:
+    localEndpointSelector:
+      matchLabels:
+        app.kubernetes.io/name: echo-server
+    toPorts:
+      - port: "8080"
+        protocol: TCP
+

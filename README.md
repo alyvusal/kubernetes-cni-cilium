@@ -1,145 +1,26 @@
 # Cilium (eBPF based networking, Observability, Security)
 
-**Note on eBPF**:
-Check if the necessary eBPF features are enabled and see also troubleshooting [guide](https://docs.cilium.io/en/latest/reference-guides/bpf/debug_and_test/):
+## [eBPF](docs/ebpf.md)
 
-```bash
-sudo bpftool feature
-```
+## [Install](docs/install.md)
 
-- Embedded in the Kernel:
-  - eBPF is not a standalone software or package; it is a subsystem built into the Linux kernel.
-  - If your Linux distribution runs a kernel version of 4.1 or higher, the kernel includes support for eBPF.
-- Progressive Enhancements:
-  - Kernel versions up to 4.4 introduced the basic capabilities of eBPF.
-  - Advanced features, such as support for tracing, networking, and security applications, require kernel versions 4.9, 4.14, 5.x, or later.
-  - Features critical to tools like Cilium often depend on capabilities introduced in kernel versions 4.19 or later.
-- Compatibility with Cilium:
-  - Cilium uses eBPF extensively for networking, security policies, and observability.
-  - Cilium recommends running kernel versions 5.3 or later to fully leverage its eBPF features.
-  - Some distributions (e.g., Ubuntu, Red Hat) backport certain eBPF features into their kernels, allowing older kernels to support some newer eBPF functionality.
-- User-Space Tools:
-  - To interact with eBPF, you typically need user-space tools like `bpftool` or `bcc`.
-  - These tools are not always installed by default but can be installed via package managers (e.g., `apt`, `yum`, etc.).
+## [Demo App](docs/demo.md)
 
-**While Hubble** provides excellent network-level observability, **Tetragon** takes security observability to the next level by providing kernel and process-level insights. Tetragon, another eBPF-powered tool under Cilium, can: Monitor process executions and file access. Detect and prevent unauthorized binaries from running.
+## [Egress Gateway](https://docs.cilium.io/en/stable/network/egress-gateway-toc/)
 
----
+The egress gateway feature routes all IPv4 connections originating from pods and destined to specific cluster-external CIDRs through particular nodes, from now on called “gateway nodes”.
 
-## 🧠 CiliumNetworkPolicy (CNP / CCNP)
+## [Hubble](docs/hubble.md)
 
-Cilium extends the basic Kubernetes NetworkPolicy model by operating at **Layer 3–7**, providing **more granular control**, **observability**, and **explicit deny** capabilities.
-CiliumNetworkPolicies (CNPs) leverage **eBPF** for efficient enforcement directly in the Linux kernel.
+## [Tetragon](docs/tetragon.md)
 
-### 🔹 Key Concepts and Enhancements
+## [Policy](docs/policy.md)
 
-- **Policy Types**
-  - `CiliumNetworkPolicy` → Namespace-scoped
-  - `CiliumClusterwideNetworkPolicy` → Cluster-wide (applies across namespaces)
+## [CLI](docs/cli.md)
 
-- **L3–L7 Aware**
-  Cilium adds **application-layer (L7)** awareness, supporting filtering based on:
-  - HTTP methods, paths, headers
-  - DNS names (`toFQDNs`)
-  - Kafka topics, gRPC services, etc.
+## Misselenous
 
-- **Explicit Deny Rules**
-  Supports both **allow** and **deny** rules (`ingressDeny`, `egressDeny`).
-  Deny rules have **higher precedence** than allow rules.
-
-- **Advanced Match Options**
-  Match traffic by:
-  - Pod, namespace, or service labels
-  - CIDRs, IP sets
-  - FQDNs, ports, protocols
-  - Identities (Cilium internal label system)
-
-- **Layer 7 Proxying**
-  Uses **Envoy** as an embedded L7 proxy to enforce HTTP/DNS/Kafka policies.
-
-- **Visibility and Observability**
-  Integrated with **Hubble** — offering flow visibility, metrics, and tracing of policy decisions.
-
-- **Policy Additivity with Deny Semantics**
-  Policies are additive, but **deny rules override allows**.
-  Order matters only in that deny is always evaluated first.
-
-- **Clusterwide Scoping**
-  Cilium can define cluster-wide network security with **CCNP**, something not possible with standard NetworkPolicy.
-
-- **CIDR Sets and Identity Awareness**
-  Supports rich CIDR filtering via `fromCIDRSet` / `toCIDRSet` and **identity-based** rules for workload-aware networking.
-
-### 📘 Summary
-
-> **CiliumNetworkPolicy = L3–L7 aware, supports allow + explicit deny, clusterwide scope, and deep observability via eBPF and Hubble.**
-
----
-
-## 🔐 [**Kubernetes NetworkPolicy**](https://github.com/alyvusal/kubernetes/blob/main/network-policy/README.md) vs Cilium Network Policies
-
-Kubernetes **NetworkPolicies** and **CiliumNetworkPolicies** define how Pods can communicate with each other and with external endpoints.
-While Kubernetes provides **L3/L4 isolation**, **Cilium** extends this to **L7**, enabling deep visibility, explicit deny rules, and advanced identity-based filtering.
-
-⚖️ See in detail [Comparison of NetworkPolicy & CiliumNetworkPolicy](https://github.com/alyvusal/kubernetes/blob/main/network-policy/README.md#-kubernetes-network-policies-vs-cilium-network-policies)
-
----
-
-## Install
-
-### [Install with CLI](https://docs.cilium.io/en/stable/gettingstarted/k8s-install-default/)
-
-```bash
-# Install
-cilium install
-cilium status
-```
-
-### [Install with HELM](https://docs.cilium.io/en/stable/installation/k8s-install-helm/#installation-using-helm)
-
-```bash
-helm repo add cilium https://helm.cilium.io/
-
-helm upgrade -i cilium cilium/cilium \
-  --version 1.20.0 \
-  -n kube-system
-
-# after any change in helm
-kubectl -n kube-system rollout restart deployment cilium-operator
-kubectl -n kube-system rollout restart ds cilium
-```
-
-### Verify installation
-
-```bash
-# Validate connectivity in cluster with CLI
-cilium connectivity test
-
-# Validate connectivity in cluster with deployment
-kubectl create ns cilium-test
-kubectl apply -n cilium-test -f https://raw.githubusercontent.com/cilium/cilium/1.20.0/examples/kubernetes/connectivity-check/connectivity-check.yaml
-# The pod name indicates the connectivity variant and the readiness and liveness gate indicates success or failure of the test
-kubectl get pods -n cilium-test
-
-# Test network performance
-cilium connectivity perf
-
-# check endpoints
-kubectl -n kube-system get pods -l k8s-app=cilium  # single node
-kubectl -n kube-system exec cilium-7h44q -- cilium-dbg endpoint list  # multi node
-kubectl get ciliumendpoints -A
-
-cilium-dbg status --verbose
-```
-
-### Demo App
-
-Use samples from [Getting Started with the Star Wars Demo](https://docs.cilium.io/en/stable/gettingstarted/demo/)
-
-- [Apply an L3/L4 Policy](https://docs.cilium.io/en/stable/gettingstarted/demo/#apply-an-l3-l4-policy)
-- [Apply and Test HTTP-aware L7 Policy](https://docs.cilium.io/en/stable/gettingstarted/demo/#apply-and-test-http-aware-l7-policy)
-
-## [CNI Chaining](https://docs.cilium.io/en/stable/installation/cni-chaining/)
+### [CNI Chaining](https://docs.cilium.io/en/stable/installation/cni-chaining/)
 
 CNI chaining allows to use Cilium in combination with other CNI plugins.
 
@@ -147,111 +28,9 @@ With Cilium CNI chaining, the base network connectivity and IP address managemen
 
 ## [Kubernetes Without `kube-proxy`](https://docs.cilium.io/en/stable/network/kubernetes/kubeproxy-free/)
 
-This guide explains how to provision a Kubernetes cluster without `kube-proxy`, and to use Cilium to fully replace it. For simplicity, we will use `kubeadm` to bootstrap the cluster.
+This guide explains how to provision a Kubernetes cluster without `kube-proxy`, and to use Cilium to fully replace it.
 
-## [Egress Gateway](https://docs.cilium.io/en/stable/network/egress-gateway-toc/)
-
-The egress gateway feature routes all IPv4 connections originating from pods and destined to specific cluster-external CIDRs through particular nodes, from now on called “gateway nodes”.
-
-## [Hubble](https://docs.cilium.io/en/stable/observability/hubble/)
-
-```bash
-helm upgrade -i cilium cilium/cilium \
-  --version 1.16.5 \
-  -n kube-system \
-  --reuse-values \
-  --set hubble.relay.enabled=true \
-  --set hubble.ui.enabled=true
-
-# validate access
-cilium hubble port-forward&
-hubble status
-hubble observe
-cilium hubble ui
-
-# run below command to see visual flow
-cilium connectivity test
-
-cilium hubble port-forward&
-hubble status
-hubble observe --pod testpod -f
-```
-
-Troubleshoot
-
-```bash
-cilium status
-kubectl -n kube-system exec ds/cilium -- cilium-dbg service list
-```
-
-## [Tetragon](https://tetragon.io/docs/)
-
-```bash
-helm upgrade -i tetragon cilium/tetragon \
-  -n kube-system \
-  --version 1.2.0 \
-  --set tetragon.hostProcPath=/procHost
-
-# test app
-kubectl create -f https://raw.githubusercontent.com/cilium/cilium/v1.15.3/examples/minikube/http-sw-app.yaml
-```
-
-## Policy
-
-Sample app
-
-```bash
-kubectl apply -f examples/apps.yaml
-```
-
-### [Network Policy Editor](https://editor.networkpolicy.io/)
-
-### Structure
-
-- [Endpoint-based](https://docs.cilium.io/en/stable/security/policy/language/#endpoints-based): can define connectivity rules based on pod labels.
-- [Service-based](https://docs.cilium.io/en/stable/security/policy/language/#services-based): use Kubernetes service endpoints to define connectivity rules.
-- [Entity-based](https://docs.cilium.io/en/stable/security/policy/language/#entities-based): categorizing remote peers without knowing their IP addresses.
-- [IP/CIDR-based](https://docs.cilium.io/en/stable/security/policy/language/#cidr-based): define connectivity rules for external services using hardcoded IP addresses or subnets.
-- [DNS-based](https://docs.cilium.io/en/stable/security/policy/language/#dns-based): can define connectivity rules based on DNS names resolved to IP addresses.
-
-Syntax
-
-```yaml
-apiVersion: cilium.io/v2
-kind: CiliumNetworkPolicy
-metadata:
-  name: ...
-  namespace: ...
-spec:
-  endpointSelector:
-    matchLabels:
-      app: hubble-ui
-  ingress:
-    - {}
-  egress:
-    - {}
-```
-
-Note that if the endpoint selector field is empty, the policy will be applied to all pods in the namespace.
-
-**Default deny vs explicit deny (very important):**
-
-- Default deny is the implicit effect of providing no allow rules for a given direction (e.g., `ingress: []` or omitting `ingress` entirely) — traffic not explicitly allowed is denied.
-- Explicit deny uses `ingressDeny`/`egressDeny` sections to actively block traffic that would otherwise be allowed. In Cilium, explicit denies take precedence over allows (Deny > Allow).
-- Allow-all in Cilium uses an empty rule object (e.g., `- {}`) which is a wildcard rule matching everything for that direction. This is different from an empty list `[]` which means deny-all by default.
-
-**Empty {}:**
-
-1. Empty endpointSelector: {}
-An empty endpointSelector with {} means the policy applies to all endpoints within the namespace where the CiliumNetworkPolicy is defined. This acts as a wildcard selector for endpoints.
-2. Empty ingress: - {} or egress: - {}
-When an ingress or egress section contains an empty rule {} (represented as a list item - {}), it signifies a default deny for that direction of traffic for the endpoints selected by the policy.
-Specifically, if ingress: - {} is present, all incoming traffic to the selected endpoints will be denied by default, unless explicitly allowed by other rules within the ingress section.
-Similarly, if egress: - {} is present, all outgoing traffic from the selected endpoints will be denied by default, unless explicitly allowed by other rules within the egress section.
-
-```bash
-kubectl get cnp  # cnp is short for the CiliumNetworkPolicy
-```
+### [Performance Optimization](docs/performance.md)
 
 ## REFERENCE
 
@@ -291,3 +70,5 @@ kubectl get cnp  # cnp is short for the CiliumNetworkPolicy
 - [Helm Reference](https://docs.cilium.io/en/stable/helm-reference/)
 - [Cilium Network Policy Reference](https://docs.cilium.io/en/stable/security/policy/)
 - [Hubble Observability](https://docs.cilium.io/en/stable/observability/hubble/)
+- [Gateway API Support](https://docs.cilium.io/en/stable/network/servicemesh/gateway-api/gateway-api/)
+- [Examples](https://github.com/isovalent/cilium-up-and-running)

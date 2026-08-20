@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: netshoot-client
+  labels:
+    app.kubernetes.io/name: netshoot-client
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: k3d-k3s-default-agent-1
+  containers:
+    - name: netshoot
+      image: nicolaka/netshoot
+      command: ["sleep", "infinity"]
+
+# kubectl exec pod/netshoot-client -- curl -s -o /dev/null -w "%{http_code}\n" http://nginx-service # or pod ip

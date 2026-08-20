@@ -1,8 +1,15 @@
-# kubeProxyReplacement: "false"  # if true, then don't install kube-proxy', and change to --k3s-arg "--disable=kube-proxy@server:*" in k3d
-kubeProxyReplacement: "true"  # if true, then don't install kube-proxy', and change to kubeProxyMode to none in kind
+# Used for multi cluster connections
+cluster:
+  name: k3d-1
+  id: 0
 
-k8sServiceHost: k3d-k3s-default-server-0 # use master node in kind network
-k8sServicePort: 6443  # use api server port
+# Kube Proxy replacement
+# Cilium replaces kube-proxy entirely using eBPF, eliminating the need for iptables, IPVS, or nftables
+# set --k3s-arg "--disable=kube-proxy@server:*" in k3d
+kubeProxyReplacement: "true"
+# Cilium needs to know how to contact the API server directly, bypassing the service abstractions
+k8sServiceHost: k3d-k3s-default-server-0 # use master node
+k8sServicePort: 6443                     # use api server port
 
 externalIPs:
   enabled: true
@@ -13,12 +20,6 @@ hostPort:
 
 # policyEnforcementMode: always
 
-# ingressController:
-#   enabled: true
-#   default: true
-#   enforceHttps: false
-#   loadbalancerMode: shared
-
 # nodeinit:
 #   enabled: true
 
@@ -28,28 +29,114 @@ l2announcements:
 # l2podAnnouncements:
 #   enabled: true
 
+# eBPF datapath (masquerade like iptables, but faster)
+devices: ["eth0"]
+
+ingressController:
+  enabled: true
+  default: true
+  enforceHttps: false
+  loadbalancerMode: shared  # as k3d has same ip for all LBs, dedicated mode will conflict ips
+
+# Install Gateway API CRDs for HTTPRoute, TCPRoute, etc. then enable below to use Gateway API with Cilium
+gatewayAPI:
+  enabled: true
+
+# Kubernetes Host Scope IPAM mode
+# ipam:
+#   mode: kubernetes
+#   operator:
+#     clusterPoolIPv4PodCIDRList: ["10.42.0.0/16"]
+# tunnelProtocol: "vxlan"
+# routingMode: "tunnel"
+
+# Cluster Scope IPAM mode
+# ipam:
+#   mode: cluster-pool
+#   operator:
+#     clusterPoolIPv4MaskSize: 29  # per node pool size
+#     clusterPoolIPv4PodCIDRList:
+#       - 10.0.42.0/28
+#       - 10.0.84.0/28
+# tunnelProtocol: "vxlan"
+# routingMode: "tunnel"
+
+# Multi-Pool IPAM mode
 ipam:
-  mode: kubernetes
+  mode: multi-pool
   operator:
-    clusterPoolIPv4PodCIDRList: "10.42.0.0/16"
-
-operator:
-  replicas: 1
-
-# bpf:
-#   monitorAggregation: none
+    autoCreateCiliumPodIPPools:
+      default:
+        ipv4:
+          cidrs: ["10.10.0.0/16"]
+          maskSize: 27  # per node pool size
+      other:
+        ipv4:
+          cidrs:
+            - 10.20.0.0/16
+          maskSize: 24
+routingMode: native
+endpointRoutes:
+  enabled: true
+autoDirectNodeRoutes: true  # auto route injection for POD CIDRs attached to each node
+# Cover pod pools (10.10/16, 10.20/16, 10.30/16) but not the k3s service CIDR 10.43.0.0/16
+ipv4NativeRoutingCIDR: 10.0.0.0/11
+# iptables masquerade needs egressMasqueradeInterfaces in multi-pool; eBPF masquerade does not need it
+# hostLegacyRouting: BPF host routing blackholes pod->API (ClusterIP 10.43.0.1) on k3d
+bpf:
+  masquerade: true
+  hostLegacyRouting: true
+  # monitorAggregation: none
 
 hubble:
   enabled: true
   relay:
     enabled: true
+    rollOutPods: true
   ui:
     enabled: true
+    rollOutPods: true
     ingress:
       enabled: true
-      className: traefik
+      className: cilium
       hosts:
         - hubble-192.168.0.100.nip.io
 
 encryption:
   enabled: false
+
+##### Performance
+
+# BBR
+# bandwidthManager:
+#   enabled: true
+#   bbr: true
+
+loadBalancer:
+  serviceTopology: true  # enable Service Traffic Distribution
+  # Use "dsr" mode for Direct Server Return
+  mode: "dsr" # default snat
+
+  # This enables native XDP mode if supported by the NIC driver. Don't use this for cross-platform compatibility
+  # acceleration: "native"  # "use best-effort" to allow automatic fallback
+
+  # Use Maglev for consistent hashing
+  # algorithm: "maglev"
+
+# Optional: Enable for more detailed DSR logging
+# debug:
+#   enabled: true
+  # verbose: ["datapath", "service"]
+
+localRedirectPolicies:
+  enabled: true  # enable Local Redirect Policy
+
+# Restart agent/operator on ConfigMap changes (needed for LRP CRD + enable-local-redirect-policy)
+rollOutCiliumPods: true
+
+operator:
+  replicas: 1
+  rollOutPods: true
+
+envoy:
+  rollOutPods: true
