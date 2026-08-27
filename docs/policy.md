@@ -118,3 +118,5 @@ Similarly, if egress: - {} is present, all outgoing traffic from the selected en
 ```bash
 kubectl get cnp  # cnp is short for the CiliumNetworkPolicy
 ```
+
+## [Special Identities](https://docs.cilium.io/en/stable/gettingstarted/terminology/#special-identities)

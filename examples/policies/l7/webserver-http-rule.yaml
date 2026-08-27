@@ -1,0 +1,22 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: webserver
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: webserver
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: test
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+          rules:
+            http:
+              - method: GET
+                path: "/api"
+                # path: "/api/.*"  # matches all paths under /api
+                # path: "/api.*"  # may match  /api-beta/v1 also

@@ -26,11 +26,17 @@ hostPort:
 l2announcements:
   enabled: true
 
+# Use L2 Announcements for pod IPs rather than service IPs
+# However, this is generally discouraged since pods are ephemeral and advertising pod IPs directly
+#   bypasses the service abstraction and its load-balancing behavior
 # l2podAnnouncements:
 #   enabled: true
 
 # eBPF datapath (masquerade like iptables, but faster)
 devices: ["eth0"]
+
+bgpControlPlane:
+  enabled: true
 
 ingressController:
   enabled: true
@@ -101,15 +107,88 @@ hubble:
       className: cilium
       hosts:
         - hubble-192.168.0.100.nip.io
+  # This makes it easy to forward logs to systems like Grafana Loki, Fluent Bit, or
+  # Splunk for long-term storage and analysis.
+  export:
+    static:
+      enabled: true
+      filePath: /var/run/cilium/hubble/events.log
+  # -- Enables redacting sensitive information present in Layer 7 flows.
+  # redact:
+  #   enabled: true
+  #   http:
+  #     urlQuery: false
+  #     userInfo: false
+  #     headers:
+  #       deny:
+  #         - Authorization
+  #         - Proxy-Authorization
+  metrics:
+    enableOpenMetrics: true
+    enabled:
+      - dns
+      - drop
+      - tcp
+      - flow
+      - port-distribution
+      - icmp
+      - httpV2: >
+          sourceContext=workload|pod|dns|ip;
+          destinationContext=workload|pod|dns|ip
+          exemplars=true
+          labelsContext=source_ip,source_namespace,source_workload,destination_ip,destination_namespace,destination_workload,traffic_direction
+
 
 encryption:
   enabled: false
 
+# In advanced scenarios—such as when using Multi-Pool IPAM
+# where pod IPs are allocated from separate, nonoverlapping CIDRs—you
+# may need to explicitly define which CIDRs should bypass masquerading. Cilium
+# supports this via the ip-masq-agent feature
+ipMasqAgent:
+  enabled: true
+  config:
+    # By default, the agent automatically provisions a default set of non-masquerade
+    #   CIDRs, covering well-known private and reserved IP ranges:
+    # 192.0.2.0/24
+    # 192.88.99.0/24
+    # 192.168.0.0/16
+    # 10.0.0.0/8
+    # 100.64.0.0/10
+    # 172.16.0.0/12
+    # 198.18.0.0/15
+    # 198.51.100.0/24
+    # 203.0.113.0/24
+    # 240.0.0.0/4
+    # 169.254.0.0/16
+    # 192.0.0.0/24
+    nonMasqueradeCIDRs:  # Useful for Multi-Pool IPAM, or connect to external networks via routing
+      - 10.0.0.0/8
+      - 172.16.0.0/12
+      - 192.168.0.0/16
+      - 169.254.0.0/16
+    masqLinkLocal: true
+    masqLinkLocalIPv6: true
+
+egressGateway:
+  enabled: true
+
+# tls:
+#   secretSync:
+#     enabled: false
+
+# Transparent Encryption
+encryption:
+  enabled: true
+  type: wireguard # ipsec, wireguard or ztunnel.
+  nodeEncryption: true
+
 ##### Performance
 
 # BBR
-# bandwidthManager:
-#   enabled: true
+bandwidthManager:
+  enabled: true
 #   bbr: true
 
 loadBalancer:

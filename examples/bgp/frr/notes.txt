@@ -1,0 +1,31 @@
+$ kubectl get nodes -o wide
+NAME STATUS ROLES INTERNAL-IP
+kind-worker Ready <none> 172.18.0.2
+kind-worker2 Ready <none> 172.18.0.3
+
+$ WORKER_IP=172.18.0.2
+$ WORKER2_IP=172.18.0.3
+
+Next, generate an FRR configuration file from the provided template and use the
+UNIX utility sed to modify the template values with the IP addresses of the worker
+nodes:
+
+$ sed -e "s/NEIGHBOR1/${WORKER_IP}/" -e "s/NEIGHBOR2/${WORKER2_IP}/" \
+frr.conf.template | tee frr.conf
+
+Finally, start the FRR container on the same Docker network as the kind cluster,
+using the newly created configuration file:
+
+$ docker run -d --privileged --rm --net kind \
+-v "$PWD/frr.conf:/etc/frr/frr.conf" \
+-v "$PWD/vtysh.conf:/etc/frr/vtysh.conf" \
+-v "$PWD/daemons:/etc/frr/daemons" \
+--name frr quay.io/frrouting/frr:10.7.0
+
+$ docker exec -it frr vtysh -c "show bgp summary wide"
+IPv4 Unicast Summary:
+BGP router identifier 172.18.255.254, local AS number 64512
+Neighbor V AS MsgRcvd MsgSent Up/Down State/PfxRcd
+172.18.0.2 4 64512 0 0 never Active
+172.18.0.3 4 64512 0 0 never Active
+Total number of neighbors 2

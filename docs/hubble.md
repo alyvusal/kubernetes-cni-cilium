@@ -9,39 +9,30 @@ helm upgrade -i cilium cilium/cilium \
   --reuse-values \
   --set hubble.relay.enabled=true \
   --set hubble.ui.enabled=true
-
-# validate access
-cilium hubble port-forward&
-hubble status
-hubble observe
-cilium hubble ui
-
-# run below command to see visual flow
-cilium connectivity test
-
-cilium hubble port-forward&
-hubble status
-hubble observe --pod testpod -f
-hubble observe --http-header "X-Header-Add-1:header-add-1"
-```
-
-Troubleshoot
-
-```bash
-cilium status
-kubectl -n kube-system exec ds/cilium -- cilium-dbg service list
 ```
 
 ## [Hubble CLI](https://docs.cilium.io/en/stable/observability/hubble/hubble-cli/)
+
+By default, `hubble observe` only shows flows from the node where you run it, which may not be particularly helpful in a real-world scenario with numerous applications spread across multiple nodes. To aggregate flows from all nodes, you will need to use `Hubble Relay`.
 
 ```bash
 cilium hubble ui
 cilium hubble port-forward &
 hubble status
+
 hubble list nodes
 hubble observe
 hubble observe --from-pod netshoot-client
 hubble observe --from-pod netshoot-client --http-path "/index.html"
 hubble observe --label app.kubernetes.io/name=nginx
 hubble observe -t policy-verdict
+hubble observe -n webshop -t drop
+hubble observe -n webshop --protocol http
+hubble observe --pod testpod -f
+hubble observe --http-header "X-Header-Add-1:header-add-1"
+hubble observe -n webshop -t drop -o json | jq
+
+# Hubble relay
+kubectl port-forward -n kube-system deploy/hubble-relay 4245:4245
+hubble status
 ```

@@ -1,0 +1,44 @@
+# docker exec k3d-k3s-default-agent-0 ip addr add 172.18.0.100/16 dev eth0
+# docker exec k3d-k3s-default-agent-1 ip addr add 172.18.0.101/16 dev eth0
+---
+apiVersion: cilium.io/v2
+kind: CiliumEgressGatewayPolicy
+metadata:
+  name: hr-egress
+spec:
+  destinationCIDRs:
+  - "172.18.0.0/16"
+  # excludeCIDRs:
+  #   - "172.18.0.0/24"
+  selectors:
+  - namespaceSelector:
+      matchLabels:
+        name: hr
+    # podSelector:
+    #   matchLabels:
+    #     env: prod
+    # nodeSelector:
+    #   matchLabels:
+    #     node.kubernetes.io/name: k3d-k3s-default-agent-0
+  egressGateway:
+    nodeSelector:
+      matchLabels:
+        node.kubernetes.io/name: k3d-k3s-default-agent-0
+    egressIP: 172.18.0.100
+---
+apiVersion: cilium.io/v2
+kind: CiliumEgressGatewayPolicy
+metadata:
+  name: sales-egress
+spec:
+  destinationCIDRs:
+    - "172.18.0.0/16"
+  selectors:
+  - namespaceSelector:
+      matchLabels:
+        name: sales
+  egressGateway:
+    nodeSelector:
+      matchLabels:
+        node.kubernetes.io/name: k3d-k3s-default-agent-1
+    egressIP: 172.18.0.101

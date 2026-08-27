@@ -3,6 +3,9 @@
 # Address Resolution Protocol (ARP) for IPv4 or Neighbor Discovery (ND) for IPv6,
 # so external hosts can reach those IPs without a separate load balancer if they share
 # a layer 2 domain
+# for Cilium L2 Announcements, the VIP normally needs to be on the same L2 network/VLAN
+#   as the clients that need to reach it. For different range, it will send the packet to its router instead
+# Cilium's L2 announcement isn't a routing protocol. It only responds to ARP/NDP on the local L2 segment.
 apiVersion: "cilium.io/v2alpha1"
 kind: CiliumL2AnnouncementPolicy
 metadata:
